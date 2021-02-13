@@ -1,0 +1,145 @@
+#!/bin/bash
+############################
+# Patch Utility
+# Author: Nick Marriotti
+# Date: 2/12/2021
+############################
+
+SCRIPTROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+PATCHED_FILES_DIR="$SCRIPTROOT/files"
+MANIFEST_CONFIG="$SCRIPTROOT/manifest.cfg"
+MANIFEST="$SCRIPTROOT/manifest"
+PATCH_DIR="$SCRIPTROOT/patches"
+
+
+WriteManifestLine() {
+	dest=$1
+	echo "adding $dest to manifest"
+	# Calculate hash
+        md5=`md5sum $dest | cut -d ' ' -f 1`
+	# Copy dir structure and file to patched files
+	cp --parents -r $dest $PATCHED_FILES_DIR/
+	# This is where deployed file lives on the filesystem
+	src=$PATCHED_FILES_DIR$dest
+
+	# Get file attributes
+	owner=`stat -c %U $dest`
+	group=`stat -c %G $dest`
+	perms=`stat -c %a $dest`
+
+	# Check if MD5 is empty
+	if [ -z $md5 ]; then
+		md5="-"
+	fi
+
+	# Write data to manifest 
+	echo "$md5,$src,$dest,$owner,$group,$perms" >> $MANIFEST
+}
+
+
+# Builds a manifest file used to deploy patches
+# Contains MD5 hash, and src/dest file paths
+Build() {
+	echo "Building manifest..."
+	
+	# Will store patched files
+	mkdir -p $PATCHED_FILES_DIR 2> /dev/null
+
+	# Count of files included in this patch
+	num_files=0
+	
+	# Cleanup 
+	rm -f $MANIFEST &> /dev/null
+	rm -rf $PATCHED_FILES_DIR/*
+	
+        # Iterate over each file to be included in patch
+        while read -r dest
+	do
+		if [ -d $dest ]; then
+			echo "scanning $dest"
+			# Adding an entire directory
+
+			# find all subfolders
+			for d in $(find $dest -type d); do
+				WriteManifestLine $d
+				# Find all files in each subfolder			
+				for f in $(find $d -type f); do
+					WriteManifestLine $f
+					((num_files++))
+				done
+			done
+		else
+			WriteManifestLine $dest
+			((num_files++))
+		fi
+	done < $MANIFEST_CONFIG
+	echo "added $num_files file(s)."
+	echo ""
+	echo "build complete."
+}
+
+
+ApplyPatches() {
+	echo "checking files..."
+	num_patched=0
+	mkdir $PATCH_DIR	
+	# Read each line in manifest
+        while read -r line
+	do
+		# Parse line from manifest
+		IFS=',' read -r -a array <<< $line
+                md5=${array[0]}
+		src=${array[1]}
+		dest=${array[2]}
+		owner=${array[3]}
+		group=${array[4]}
+		perms=${array[5]}
+
+		# Check if this is a directory
+		if [ -d $dest ]; then
+			mkdir -p $dest	
+		elif [ -f $dest ]; then						
+			diff -u $dest $src > /dev/null				# check file diff
+			if [ $? -eq 1 ]; then					# return code 1 mean patch req'd
+				diff -u $dest $src > "$PATCH_DIR/file.patch"	# create patch file
+				patch -u $dest -i "$PATCH_DIR/file.patch"	# patch the file
+				((num_patched++))				# increment counter
+				rm -f $PATCH_DIR/file.patch			# Remove patch after it's applied
+			fi
+		else
+			# File is missingi from filesystem, replace it
+			mkdir -p `dirname $dest` # Create destination directories
+			cp -fpv $src $dest	 # Copy file from patch to filesystem
+			((num_patched++))
+		fi
+
+		# set dir/file permissions
+		chown $owner:$group $dest
+		chmod $perms $dest
+		
+	done < $MANIFEST
+
+	rm -rf $PATCH_DIR
+	
+	if [[ $num_patched -eq 0 ]]; then
+		echo "no action taken. all files are intact" 
+	else
+		echo "$num_patched files patched."
+	fi
+
+}
+
+
+# Script starts here
+if [[ $(/usr/bin/id -u) -ne 0 ]]; then
+	echo "Must be root"
+	exit 1
+fi
+
+if [ $# == 1 ]; then
+	if [ `echo $1` == 'build' ]; then
+		Build
+	fi
+else
+	ApplyPatches
+fi
