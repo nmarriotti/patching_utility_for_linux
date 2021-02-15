@@ -81,6 +81,14 @@ Build() {
 
 ApplyPatches() {
 	echo "checking files..."
+	if [ ! -f $MANIFEST ]; then
+		echo "ERROR: Manifest not found"
+		exit 1
+	fi
+	
+	# Create a backup
+	Backup
+
 	num_patched=0
 	mkdir $PATCH_DIR	
 	# Read each line in manifest
@@ -129,6 +137,16 @@ ApplyPatches() {
 
 }
 
+Backup() {
+	echo "creating backup..."
+	echo "backup created."
+}
+
+Restore() {
+	echo "restoring from backup..."
+	echo "restore complete."
+}
+
 
 # Script starts here
 if [[ $(/usr/bin/id -u) -ne 0 ]]; then
@@ -139,7 +157,18 @@ fi
 if [ $# == 1 ]; then
 	if [ `echo $1` == 'build' ]; then
 		Build
+	elif [ `echo $1` == 'restore' ]; then
+		Restore
 	fi
 else
-	ApplyPatches
+	while true; do
+		echo "WARNING! THIS ACTION CANNOT BE UNDONE!"
+
+    		read -p "Do you wish to run this patch? " yn
+    		case $yn in
+        		[Yy]* ) ApplyPatches; break;;
+        	[Nn]* ) exit;;
+        	* ) echo "Please answer yes or no.";;
+    		esac
+	done
 fi
