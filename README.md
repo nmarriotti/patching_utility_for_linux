@@ -16,6 +16,16 @@ The manifest contains MD5 hashes, file paths for where the file/folder resides i
 
 ### Patching
 
+If a file needs to be patched, a backup of the original file is taken.
+
 ```
 ./patch
+```
+
+### Restore
+
+MD5 hashes of the backed up file and the currently deployed file. If there are discrepancies then the file will be restored from the backup.
+
+```
+./patch restore
 ```
