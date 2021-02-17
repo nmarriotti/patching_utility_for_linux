@@ -12,10 +12,9 @@ MANIFEST="$SCRIPTROOT/manifest"
 PATCH_DIR="$SCRIPTROOT/patches"
 BACKUP_DIR="$SCRIPTROOT/backup"
 
-
+# Writes data to the manifest file
 WriteManifestLine() {
 	dest=$1
-	#echo "adding $dest to manifest"
 	# Calculate hash
         md5=`md5sum $dest | cut -d ' ' -f 1`
 	# Copy dir structure and file to patched files
@@ -39,6 +38,7 @@ WriteManifestLine() {
 	if [ -f "$dest" ]; then
 		if ! grep -q "$dest" "$MANIFEST"
 	 	then
+			# this file is not in the manifest, add it
 			echo "adding $dest to manifest"
 			echo $line >> $MANIFEST
 		fi
@@ -49,8 +49,8 @@ WriteManifestLine() {
 }
 
 
-# Builds a manifest file used to deploy patches
-# Contains MD5 hash, and src/dest file paths
+# Processes manifest.cfg and recursively locates files
+# to include in the manifest file
 Build() {
 	echo "Building manifest..."
 
@@ -67,12 +67,12 @@ Build() {
 	rm -f $MANIFEST &> /dev/null
 	rm -rf $PATCHED_FILES_DIR/*
 	
-        # Iterate over each file to be included in patch
+        # Iterate over each line of manifest.cfg
         while read -r dest
 	do
 		if [ -d $dest ]; then
-			echo "scanning $dest"
 			# Adding an entire directory
+			echo "scanning $dest"
 
 			# find all subfolders
 			for d in $(find $dest -type d); do
@@ -84,10 +84,12 @@ Build() {
 				done
 			done
 		else
+			# Adding a single file
 			WriteManifestLine $dest
 			((num_files++))
 		fi
 	done < $MANIFEST_CONFIG
+
 	echo "added $num_files file(s)."
 	echo ""
 	echo "build complete."
@@ -122,9 +124,7 @@ ApplyPatches() {
 		elif [ -f $dest ]; then						
 			diff -u $dest $src > /dev/null				# check file diff
 			if [ $? -eq 1 ]; then					# return code 1 mean patch req'd
-				# Create a backup of this file
-				Backup $dest
-				
+				Backup $dest					# create a backup of this file
 				diff -u $dest $src > "$PATCH_DIR/file.patch"	# create patch file
 				patch -u $dest -i "$PATCH_DIR/file.patch"	# patch the file
 				((num_patched++))				# increment counter
@@ -155,12 +155,14 @@ ApplyPatches() {
 
 }
 
+
 Backup() {
 	file=$1
 	mkdir $BACKUP_DIR 2> /dev/null
 	echo "creating backup of $file"	 
 	cp --parents -r $file $BACKUP_DIR
 }
+
 
 Restore() {
 	echo "restoring..."
