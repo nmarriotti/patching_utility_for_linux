@@ -77,6 +77,12 @@ Build() {
     # Iterate over each line of manifest.cfg
     while read -r dest
 	do
+
+		if [ -z $dest ]; then
+			# ignore empty lines
+			continue
+		fi
+
 		if [ -d $dest ]; then
 			# Adding an entire directory
 			echo "scanning $dest"
@@ -86,7 +92,7 @@ Build() {
 				# Write this directory to manifest
 				WriteManifestLine $d
 				
-				# Find all files in each subfolder			
+				# Find all files in each subfolder
 				for f in $(find $d -type f); do
 					# Write this file to manifest
 					WriteManifestLine $f
@@ -132,20 +138,32 @@ ApplyPatches() {
 		# Check if this is a directory
 		if [ -d $dest ]; then
 			mkdir -p $dest	
-		elif [ -f $dest ]; then						
-			diff -u $dest $src > /dev/null						# check file diff
-			if [ $? -eq 1 ]; then								# return code 1 means patch is required
-				Backup $dest									# create a backup of this file
-				diff -u $dest $src > "$PATCH_DIR/file.patch"	# create patch file
-				patch -u $dest -i "$PATCH_DIR/file.patch"		# patch the file
-				((num_patched++))								# increment counter
-				rm -f $PATCH_DIR/file.patch						# Remove patch after it's applied
+		elif [ -f $dest ]; then
+			# check file diff				
+			diff -u $dest $src > /dev/null
+			# return code 1 means patch is required
+			if [ $? -eq 1 ]; then
+				# create a backup of this file
+				Backup $dest
+
+				# create patch file			
+				diff -u $dest $src > "$PATCH_DIR/file.patch"
+
+				# patch the file	
+				patch -u $dest -i "$PATCH_DIR/file.patch"
+
+				# Remove patch after it's applied
+				rm -f $PATCH_DIR/file.patch
+
+				((num_patched++))				
 			fi
 		else
 			# File is missing from filesystem, replace it
-			mkdir -p `dirname $dest` 							# Create destination directories
+			# Create destination directories
+			mkdir -p `dirname $dest`
 			echo "installing $dest"
-			cp -fp $src $dest	 								# Copy file from patch to filesystem
+			# Copy file from patch to filesystem
+			cp -fp $src $dest
 			((num_patched++))
 		fi
 
