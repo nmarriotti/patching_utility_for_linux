@@ -119,7 +119,6 @@ ApplyPatches() {
                 md5=${array[0]}
 		#src=${array[1]}
 		src=$PATCHED_FILES_DIR${array[1]}
-		echo "SOURCE: $src"
 
 		dest=${array[2]}
 		owner=${array[3]}
