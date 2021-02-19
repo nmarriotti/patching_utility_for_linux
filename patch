@@ -14,16 +14,16 @@ BACKUP_DIR="$SCRIPTROOT/backup"
 
 # Writes data to the manifest file
 WriteManifestLine() {
+	# Requires the absolute path of file to patch as an argument
 	dest=$1
+	
 	# Calculate hash
-        md5=`md5sum $dest | cut -d ' ' -f 1`
-	# Copy dir structure and file to patched files
+    md5=`md5sum $dest | cut -d ' ' -f 1`
+	
+	# Copy entire directory structure and file to ./files/
 	cp --parents -r $dest $PATCHED_FILES_DIR/
 	
-	# This is where deployed file lives on the filesystem
-	#src=$PATCHED_FILES_DIR$dest
-	
-	# Do not include $PATCHED_FILE path
+	# Do not include $PATCHED_FILES_DIR path
 	# to allow user to patch from any folder
 	src=$dest
 
@@ -34,12 +34,14 @@ WriteManifestLine() {
 
 	# Check if MD5 is empty
 	if [ -z $md5 ]; then
-		md5="-"
+		md5="-"	# unable to hash directories
 	fi
 	touch $MANIFEST > /dev/null
 	
-	# Check if data is already in manifest
+	# Will be written to manifest
 	line="$md5,$src,$dest,$owner,$group,$perms"
+
+	# Check if data is already in manifest
 	if [ -f "$dest" ]; then
 		if ! grep -q "$dest" "$MANIFEST"
 	 	then
@@ -81,9 +83,12 @@ Build() {
 
 			# find all subfolders
 			for d in $(find $dest -type d); do
+				# Write this directory to manifest
 				WriteManifestLine $d
+				
 				# Find all files in each subfolder			
 				for f in $(find $d -type f); do
+					# Write this file to manifest
 					WriteManifestLine $f
 					((num_files++))
 				done
@@ -112,14 +117,13 @@ ApplyPatches() {
 	mkdir $PATCH_DIR	
 	
 	# Read each line in manifest
-        while read -r line
+    while read -r line
 	do
 		# Parse line from manifest
 		IFS=',' read -r -a array <<< $line
-                md5=${array[0]}
-		#src=${array[1]}
+        
+		md5=${array[0]}
 		src=$PATCHED_FILES_DIR${array[1]}
-
 		dest=${array[2]}
 		owner=${array[3]}
 		group=${array[4]}
@@ -148,9 +152,9 @@ ApplyPatches() {
 		# set dir/file permissions
 		chown $owner:$group $dest 2> /dev/null
 		chmod $perms $dest 2> /dev/null
-		
 	done < $MANIFEST
 
+	# Remove patch directory when finished patching
 	rm -rf $PATCH_DIR
 	
 	if [[ $num_patched -eq 0 ]]; then
@@ -161,7 +165,7 @@ ApplyPatches() {
 	fi
 }
 
-
+# Copies the original file to the backup directory
 Backup() {
 	file=$1
 	mkdir $BACKUP_DIR 2> /dev/null
@@ -169,7 +173,7 @@ Backup() {
 	cp --parents -r $file $BACKUP_DIR
 }
 
-
+# Replaces file with the backed up copy
 Restore() {
 	echo "restoring..."
 	num_restored=0
@@ -183,7 +187,9 @@ Restore() {
 		group=${array[4]}
 		perms=${array[5]}
 
+		# This is the backup file
 		restoreFile=$BACKUP_DIR$dest
+
 		if [ -f $restoreFile ]; then
 			# Check if a restore is necessary
         		backup_md5=`md5sum $restoreFile | cut -d ' ' -f 1`
