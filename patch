@@ -19,8 +19,13 @@ WriteManifestLine() {
         md5=`md5sum $dest | cut -d ' ' -f 1`
 	# Copy dir structure and file to patched files
 	cp --parents -r $dest $PATCHED_FILES_DIR/
+	
 	# This is where deployed file lives on the filesystem
-	src=$PATCHED_FILES_DIR$dest
+	#src=$PATCHED_FILES_DIR$dest
+	
+	# Do not include $PATCHED_FILE path
+	# to allow user to patch from any folder
+	src=$dest
 
 	# Get file attributes
 	owner=`stat -c %U $dest`
@@ -67,8 +72,8 @@ Build() {
 	rm -f $MANIFEST &> /dev/null
 	rm -rf $PATCHED_FILES_DIR/*
 	
-        # Iterate over each line of manifest.cfg
-        while read -r dest
+    # Iterate over each line of manifest.cfg
+    while read -r dest
 	do
 		if [ -d $dest ]; then
 			# Adding an entire directory
@@ -112,7 +117,10 @@ ApplyPatches() {
 		# Parse line from manifest
 		IFS=',' read -r -a array <<< $line
                 md5=${array[0]}
-		src=${array[1]}
+		#src=${array[1]}
+		src=$PATCHED_FILES_DIR${array[1]}
+		echo "SOURCE: $src"
+
 		dest=${array[2]}
 		owner=${array[3]}
 		group=${array[4]}
@@ -122,19 +130,19 @@ ApplyPatches() {
 		if [ -d $dest ]; then
 			mkdir -p $dest	
 		elif [ -f $dest ]; then						
-			diff -u $dest $src > /dev/null				# check file diff
-			if [ $? -eq 1 ]; then					# return code 1 mean patch req'd
-				Backup $dest					# create a backup of this file
+			diff -u $dest $src > /dev/null						# check file diff
+			if [ $? -eq 1 ]; then								# return code 1 means patch is required
+				Backup $dest									# create a backup of this file
 				diff -u $dest $src > "$PATCH_DIR/file.patch"	# create patch file
-				patch -u $dest -i "$PATCH_DIR/file.patch"	# patch the file
-				((num_patched++))				# increment counter
-				rm -f $PATCH_DIR/file.patch			# Remove patch after it's applied
+				patch -u $dest -i "$PATCH_DIR/file.patch"		# patch the file
+				((num_patched++))								# increment counter
+				rm -f $PATCH_DIR/file.patch						# Remove patch after it's applied
 			fi
 		else
-			# File is missingi from filesystem, replace it
-			mkdir -p `dirname $dest` # Create destination directories
+			# File is missing from filesystem, replace it
+			mkdir -p `dirname $dest` 							# Create destination directories
 			echo "installing $dest"
-			cp -fp $src $dest	 # Copy file from patch to filesystem
+			cp -fp $src $dest	 								# Copy file from patch to filesystem
 			((num_patched++))
 		fi
 
@@ -152,7 +160,6 @@ ApplyPatches() {
 		echo "$num_patched files patched."
 		echo -e "\nrevert changes with './patch restore'"
 	fi
-
 }
 
 
@@ -170,7 +177,7 @@ Restore() {
 	while read -r line
 	do
 		IFS=',' read -r -a array <<< $line
-                md5=${array[0]}
+        md5=${array[0]}
 		src=${array[1]}
 		dest=${array[2]}
 		owner=${array[3]}

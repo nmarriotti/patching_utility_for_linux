@@ -5,6 +5,7 @@ This script creates a snapshot of files and/or entire directory structures and p
 ## How to Use
 
 Open _manifest.cfg_ and add each file or folder that you would like included in the patch to a new line.
+__NOTE:__ The manifest.cfg file should contain an empty line at the end of the file.
 
 ### Build the Manifest
 
@@ -16,7 +17,7 @@ The manifest contains MD5 hashes, file paths for where the file/folder resides i
 
 ### Patching
 
-If a file needs to be patched, a backup of the original file is taken.
+If a file needs to be patched, a backup of the original file is taken and stored in the backup/ directory
 
 ```
 ./patch
@@ -24,7 +25,7 @@ If a file needs to be patched, a backup of the original file is taken.
 
 ### Restore
 
-MD5 hashes of the backed up file and the currently deployed file. If there are discrepancies then the file will be restored from the backup.
+MD5 hashes of the backed up file and the currently deployed file are compared. If there are discrepancies then the file will be restored from the backup.
 
 ```
 ./patch restore
